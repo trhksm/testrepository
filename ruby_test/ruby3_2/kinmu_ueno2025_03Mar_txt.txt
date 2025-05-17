@@ -1,0 +1,17 @@
+# 勤務表 2025_03Mar(上野　佑記)
+#
+#----------------------------------------
+#日付  時刻(in/out)  稼働率[%]  交通費  作業内容
+03/01 10:45 22:00 80 460 slb(4h;angularをv19に上げる)、miniAGV(等加速度になるように修正)
+03/03 12:00 22:00 90 460 slb(4h;geotoolkitをv4に上げる)、miniAGV(連続的なコマンド入力に対応)、mdf(棚の組み立てのレクチャーを受ける)
+03/04 10:00 22:00 75 460 slb(6h;mtg、commonとschemaのプルリク、geotoolkit研修) 、miniAGV(正転→逆転の連続的変化)
+03/06 13:00 22:00 100 460 mdf(マーカーのマグネット貼り)、miniAGV(joyconで動かす)
+03/07 10:00 22:00 75 460 slb(4h;mtg、bhs-viewerのプルリク、Web Workflow Manager)、miniAGV(controllerで、前進後退と方向指定で進む)
+03/08 10:00 22:00 75 460 slb(4h;mtg、bhs-viewerのrebase&conflict解消、dockerのsetup)、miniAGV(controller操作完成)
+03/11 08:00 17:00 100 460 slb(6h;mtg、wm.frontendをいじる、新規Workflowの作成(途中))
+03/22 10:00 22:00 75 460 slb(4h;disk容量肥大化の対策、base64を返すserverを立てる)、mdf(コントローラーボックスの配線)
+03/25 11:00 21:00 90 460 slb(4h;新規Workflowの作成)、mdf(コントローラーボックスの配線)、agv(コードを読む)
+03/27 9:00 21:00 75 460 slb(4h;新規workflow、geotoolkit)、mdf(コントローラーボックス)
+03/29 10:00 22:00 75 460 slb(2h;mtg、SeismicPlotのpipelineのエラー対処)、agv(自己位置推定のコードを書く)
+#
+#----------------------------------------
