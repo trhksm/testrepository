@@ -1,5 +1,4 @@
 const express = require('express');
-const fs = require('fs')//
 const app = express();
 app.use(express.urlencoded({ extended: true }));
 const crypto = require('crypto')
@@ -25,12 +24,11 @@ async function dbEnd(db){
 //shifts追加&更新
 async function shiftPut(u,d,s,f,c){
     let db = await dbConnect();
-    const [rows] = await db.execute('SELECT id FROM shifts WHERE username = ? AND date = ? LIMIT 1', [u, d]);
+    const [rows] = await db.execute('SELECT id FROM shifts WHERE username = ? AND date = ? AND ena = TRUE', [u, d]);
     if (rows.length > 0) {
-	await db.execute('UPDATE shifts SET stime = ?, ftime = ?, comment = ? WHERE username = ? AND date = ?',[s,f,c,u,d]);
-    }else{
-	await db.execute('INSERT shifts (username, date, stime, ftime, comment) VALUES (?,?,?,?,?)',[u,d,s,f,c]);
+	await db.execute('UPDATE shifts SET ena = FALSE WHERE username = ? AND date = ?',[s,f,c,u,d]);
     }
+    await db.execute('INSERT shifts (username, date, stime, ftime, comment) VALUES (?,?,?,?,?)',[u,d,s,f,c]);
     await dbEnd(db);
 }
 
@@ -66,7 +64,7 @@ async function tokenDelete(u){
 //shift削除
 async function shiftDelete(u,d){
     let db = await dbConnect();
-    await db.execute('DELETE FROM shifts WHERE username = ? AND date = ?', [u,d]);
+    await db.execute('UPDATE shifts SET ena = FALSE WHERE username = ? AND date = ?', [u,d]);
     await dbEnd(db);
 }
 
@@ -176,7 +174,7 @@ async function main(){
 	    const name = cookies['name'];
 	    //シフト読み込み
 	    const db = await dbConnect();
-	    const [data] = await db.query(`SELECT username, DATE_FORMAT(date, '%Y-%m-%d') as date, stime, ftime, comment FROM shifts ORDER BY date, CASE WHEN username = ? THEN 1 ELSE 2 END`, [name]);
+	    const [data] = await db.query(`SELECT username, DATE_FORMAT(date, '%Y-%m-%d') as date, stime, ftime, comment FROM shifts WHERE ena = TRUE ORDER BY date, CASE WHEN username = ? THEN 1 ELSE 2 END`, [name]);
 	    //シフト表示形式用整理
 	    let rows = data.map(row => {
 		// 出社・退社時刻をHH:MMだけに
