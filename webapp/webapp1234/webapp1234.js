@@ -112,6 +112,9 @@ app.get('/', (req, res) => {
   <form action="/signup" method="GET">
     <button type="submit">ユーザー登録</button>
   </form>
+  <form action="/logout" method="GET">
+    <button type="submit">ログアウト</button>
+  </form>
   <h1>出社予定</h1>
   <table border="1">
     <tr><th>ユーザー名</th><th>日付</th><th>出社</th><th>退社</th><th>コメント</th></tr>
@@ -201,7 +204,7 @@ app.get('/login', (req, res) => {
 <body>
   <h1>シフト管理システム</h1>
   <h2>ログイン</h2>
-  <form action="http://localhost:8822/login" method="POST">
+  <form action="/login" method="POST">
     <label>ユーザー名：
       <input type="text" name="name" required pattern="[a-z]+" title="小文字の英字のみを入力してください">
     </label><br>
@@ -271,8 +274,6 @@ app.post('/login', (req, res) => {
 app.get('/signup', (req, res) => {	
     //token確認
     if(tokencheck(req)){
-	res.redirect('/');
-    }else{
 	// HTML
 	const html = `
 <!DOCTYPE html>
@@ -296,10 +297,15 @@ app.get('/signup', (req, res) => {
     </label><br>
     <button type="submit">送信</button>
   </form>
+  <form action="/" method="GET">
+    <button type="submit">ホーム画面へ</button>
+  </form>
 </body>
 </html>
 `;
 	res.send(html);
+    }else{
+	res.redirect('/login');
     }
 });
 
@@ -366,6 +372,18 @@ app.post('/signup', (req, res) => {
 	    res.redirect('/login');
 	}
     });
+});
+//ログアウト
+app.get('/logout', async (req, res) => {
+    const cookies = parsecookies(req);
+    const name = cookies['name'];
+    // cookie削除
+    res.setHeader('Set-Cookie', [
+        `name=; Max-Age=0; Path=/; HttpOnly`,
+        `token=; Max-Age=0; Path=/; HttpOnly`
+    ]);
+    //ログイン画面へ
+    res.redirect('/login');
 });
 
 app.listen(8822, () => {

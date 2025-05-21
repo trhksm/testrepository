@@ -3,6 +3,8 @@ const app = express();
 app.use(express.urlencoded({ extended: true }));
 const crypto = require('crypto')
 const mysql = require('mysql2/promise');
+const fs = require("fs");
+const ejs = require("ejs");
 //接続
 async function dbConnect(){
     let db = await mysql.createConnection({
@@ -23,12 +25,13 @@ async function dbEnd(db){
 
 //shifts追加&更新
 async function shiftPut(u,d,s,f,c){
+    console.log({ u,d,s,f,c });
     let db = await dbConnect();
     const [rows] = await db.execute('SELECT id FROM shifts WHERE username = ? AND date = ? AND ena = TRUE', [u, d]);
     if (rows.length > 0) {
-	await db.execute('UPDATE shifts SET ena = FALSE WHERE username = ? AND date = ?',[s,f,c,u,d]);
+	await db.execute('UPDATE shifts SET ena = FALSE WHERE username = ? AND date = ?',[u,d]);
     }
-    await db.execute('INSERT shifts (username, date, stime, ftime, comment) VALUES (?,?,?,?,?)',[u,d,s,f,c]);
+    await db.execute('INSERT INTO shifts (username, date, stime, ftime, comment) VALUES (?,?,?,?,?)',[u,d,s,f,c]);
     await dbEnd(db);
 }
 
@@ -78,6 +81,16 @@ async function tokenGenerateSave(u,res){
     ]);
     //name+tokenサーバー側に保存
     await tokenInsert(u,token)
+}
+
+//error画面表示
+async function sendError(res, message, link ,place) {
+    const html_error = await ejs.renderFile(`${__dirname}/webapp5_ejs/error.ejs`, {
+	message:message,
+	link:link,
+	place:place,
+    });
+    res.status(400).send(html_error);
 }
 
 //ハッシュ化(sha256) ハッシュオブジェクト.引数とUTF8エンコーディング文字列指定.16進で文字数省略
@@ -148,21 +161,6 @@ async function checkName(name){
     return namelist.includes(name);
 }
 
-function sendError(res, message, link ,place) {
-    const html = `
-<!DOCTYPE html>
-<html lang="ja">
-<head><meta charset="UTF-8"><title>エラー</title></head>
-  <body>
-    <h1>エラー</h1>
-    <p>${message}</p>
-    <form action="${link}" method="GET">
-      <button type="submit" style="font-size: 18px; padding: 10px 20px; width: 30%;">${place}へ戻る</button>
-    </form>
-  </body>
-</html>`;
-    res.status(400).send(html);
-}
 
 async function main(){
     //ホーム画面表示
@@ -175,77 +173,27 @@ async function main(){
 	    //シフト読み込み
 	    const db = await dbConnect();
 	    const [data] = await db.query(`SELECT username, DATE_FORMAT(date, '%Y-%m-%d') as date, stime, ftime, comment FROM shifts WHERE ena = TRUE ORDER BY date, CASE WHEN username = ? THEN 1 ELSE 2 END`, [name]);
+	    await dbEnd(db);
 	    //シフト表示形式用整理
-	    let rows = data.map(row => {
-		// 出社・退社時刻をHH:MMだけに
-		const stimeHM = row.stime ? row.stime.substring(0, 5) : '';
-		const ftimeHM = row.ftime ? row.ftime.substring(0, 5) : '';	
-		return `<tr>
-    <td>${row.username}</td>
-    <td>${row.date}</td>
-    <td>${stimeHM}</td>
-    <td>${ftimeHM}</td>
-    <td>${row.comment}</td>
-  </tr>`;
-	    }).join('');
-	    dbEnd();
-	    
-	    // HTML
-	    const html = `
-<!DOCTYPE html>
-<html lang="ja">
-<head>
-  <meta charset="UTF-8">
-  <title>Webapp研修</title>
-</head>
-<body>
-  <h1>シフト管理システム</h1>
-  <h4>あなたは${name}さんとしてログインしています</h4>
-  <div style="display: flex; gap: 50px; align-items: flex-start;">
-    <form action="/" method="POST">
-      <h2>シフト投稿・更新</h2>
-      <label>年月日：
-        <input type="date" name="date" required>
-      </label><br>
-      <label>出社時刻：
-        <input type="time" name="stime" required>
-      </label><br>
-      <label>退社時刻：
-        <input type="time" name="ftime" required>
-      </label><br>
-      <label>コメント：
-        <input type="text" name="comment">
-      </label><br><br>
-      <button type="submit" style="font-size: 18px; padding: 10px 20px; width: 100%;">送信（シフト投稿・更新）</button>
-    </form>
-    <form action="/delete" method="POST">
-      <h2>シフト削除</h2>
-      <label>年月日：
-        <input type="date" name="date" required>
-      </label><br><br>
-      <button type="submit" style="font-size: 18px; padding: 10px 20px; width: 100%;">送信（シフト削除）</button>
-    </form>
-  </div>
-  <h2>出社予定</h2>
-  <table border="1">
-    <tr><th>ユーザ名</th><th>日付</th><th>出社</th><th>退社</th><th>コメント</th></tr>
-    ${rows}
-  </table>
-  <div style="display: flex; gap: 50px; align-items: flex-start;">
-    <form action="/signup" method="GET">
-    <h2>新規ユーザ登録</h2>
-      <button type="submit" style="font-size: 18px; padding: 10px 20px; width: 100%;">新規ユーザ登録画面へ</button>
-    </form>
-    <form action="/logout" method="GET">
-    <h2>ログアウト</h2>
-      <button type="submit" style="font-size: 18px; padding: 10px 20px; width: 100%;">ログアウト（ログイン画面へ）</button>
-    </form>
-  </div>
-</body>
-</html>
-`;
+	    let table = await Promise.all(data.map(async (row) => {
+		const stimeHM = row.stime.slice(0, 5);
+		const ftimeHM = row.ftime.slice(0, 5);
+		return await ejs.renderFile(`${__dirname}/webapp5_ejs/table.ejs`, {
+		    row_username: row.username,
+		    row_date: row.date,
+		    stimeHM,
+		    ftimeHM,
+		    row_comment: row.comment,
+		});
+	    }));
+	    table = table.join('');
+	    //ホーム画面HTML
+	    const home_html = await ejs.renderFile(`${__dirname}/webapp5_ejs/home.ejs`, {
+		username: name,
+		table:table,
+	    });
 	    //画面表示
-	    res.send(html);
+	    res.send(home_html);
 	}else{
 	    //ログイン画面へ
 	    sendError(res,'tokenの有効期限が切れています','/login','ログイン画面');
@@ -258,21 +206,22 @@ async function main(){
 	if(await checkToken(req)){
 	    //name取得
 	    const cookies = parseCookies(req);
-	    const name = cookies['name'];
+	    const username = cookies['name'];
 	    
-	    const date = req.body.date;//年月日
-	    const stime = req.body.stime;//出社時刻
-	    const ftime = req.body.ftime;//退社時刻
-	    const comment = req.body.comment;//コメント
+	    //年月日・出社時刻・退社時刻・コメント取得
+	    const date = req.body.date;
+	    const stime = req.body.stime;
+	    const ftime = req.body.ftime;
+	    const comment = req.body.comment;
 	    
-	    //入社時刻と退社時刻の確認
+	    //入社時刻と退社時刻の前後確認
 	    const sm = TtoM(stime);
 	    const fm = TtoM(ftime);
 	    if (sm >= fm) {
 		sendError(res,'入社時刻は退社時刻よりも前である必要があります','/','ホーム画面');
 	    }else{
 		//投稿内容出力
-		await shiftPut(name,date,stime,ftime,comment);	    
+		await shiftPut(username,date,stime,ftime,comment);	    
 		res.redirect('/');
 	    }
 	}else{
@@ -280,84 +229,106 @@ async function main(){
 	}
     });
     
-    //ホームから送信(delette用)
+    //削除用
     app.post('/delete', async (req, res) => {
 	//token確認
 	if(await checkToken(req)){
 	    //name取得
 	    const cookies = parseCookies(req);
 	    const name = cookies['name'];
-	    
-	    const date = req.body.date;//年月日
+	    const name_shift = req.body.username;
+	    const date = req.body.date;
 	    //shift削除
-	    await shiftDelete(name,date);	    
-	    res.redirect('/');
+	    if(name == name_shift){
+		await shiftDelete(name,date);	    
+		res.redirect('/');
+	    }else{
+		sendError(res,'異なるユーザのシフトを削除しようとしています','/','ホーム画面');
+	    }
 	}else{
 	    sendError(res,'tokenの有効期限が切れています','/login','ログイン画面');
 	}
     });
+	     
+    //編集画面表示
+    app.get('/edit', async (req, res) => {
+	if (await checkToken(req)) {
+	    //name取得
+	    const cookies = parseCookies(req);
+	    const username = cookies['name']
+	    const date = req.query.date;
+	    const stime = req.query.stime;
+	    const ftime = req.query.ftime;
+	    const comment = req.query.comment;
+	    const db = await dbConnect();
+	    console.log(stime,ftime,comment);
+	    const [data] = await db.query(`SELECT username, DATE_FORMAT(date, '%Y-%m-%d') as date, stime, ftime, comment FROM shifts WHERE ena = TRUE ORDER BY date, CASE WHEN username = ? THEN 1 ELSE 2 END`, [username]);
+	    await dbEnd(db);
+	    //シフト表示形式用整理
+	    let table = await Promise.all(data.map(async (row) => {
+		const stimeHM = row.stime.slice(0, 5);
+		const ftimeHM = row.ftime.slice(0, 5);
+		return await ejs.renderFile(`${__dirname}/webapp5_ejs/tableread.ejs`, {
+		    row_username: row.username,
+		    row_date: row.date,
+		    stimeHM,
+		    ftimeHM,
+		    row_comment: row.comment,
+		});
+	    }));
+	    table = table.join('');
+	    const edit_html = await ejs.renderFile(`${__dirname}/webapp5_ejs/edit.ejs`, {
+		username:username,
+		date:date,
+		stime:stime,
+		ftime:ftime,
+		comment:comment,
+		table:table,
+	    });
+	    res.send(edit_html);
+	}else{
+	    sendError(res,'tokenの有効期限が切れています','/login','ログイン画面');
+	}	
+    });
     
+    //編集画面送信
+    app.post('/edit', async (req, res) => {
+	if (await checkToken(req)) {
+	    const cookies = parseCookies(req);
+	    const username = cookies['name'];
+	    const pre_date = req.body.pre_date;
+	    const new_date = req.body.new_date;
+	    const new_stime = req.body.new_stime;
+	    const new_ftime = req.body.new_ftime;
+	    const new_comment = req.body.new_comment;
+	    await shiftDelete(username, pre_date);
+            await shiftPut(username, new_date, new_stime, new_ftime, new_comment);
+            res.redirect('/');
+	} else {
+            sendError(res, 'tokenの有効期限が切れています', '/login', 'ログイン画面');
+	}
+    });
     
-    
-    
-    //ログイン画面表示
+    //ユーザー変更・ログイン画面表示
     app.get('/login', async (req, res) => {	
 	//token確認
 	if(await checkToken(req)){
 	    //name取得
 	    const cookies = parseCookies(req);
-	    const name = cookies['name'];
+	    const username = cookies['name'];
 	    //ユーザ変更画面HTML
-	    const html = `
-<!DOCTYPE html>
-<html lang="ja">
-<head>
-  <meta charset="UTF-8">
-  <title>Webapp研修＿ログイン画面</title>
-</head>
-<body>
-  <h1>シフト管理システム</h1>
-  <h2>ユーザー変更(あなたは${name}さんとしてログインしています)</h2>
-  <form action="/login" method="POST">
-    <label>ユーザー名：
-      <input type="text" name="name" required pattern="[a-z]+" title="小文字英字">
-    </label><br>
-    <label>パスワード：
-      <input type="password" name="password" required pattern="[a-z]+" title="小文字英字または数字">
-    </label><br>
-    <button type="submit" style="font-size: 18px; padding: 10px 20px; width: 30%;">送信</button>
-  </form>
-</body>
-</html>
-`;
-	    res.send(html);
+	    const html_changeuser = await ejs.renderFile(`${__dirname}/webapp5_ejs/changeuser.ejs`, {
+		username:username,
+	    });
+	    res.send(html_changeuser);
 	}else{
 	    //ログイン画面HTML
-	    const html = `
-<!DOCTYPE html>
-<html lang="ja">
-<head>
-  <meta charset="UTF-8">
-  <title>Webapp研修＿ログイン画面</title>
-</head>
-<body>
-  <h1>シフト管理システム</h1>
-  <h2>ログイン</h2>
-  <form action="/login" method="POST">
-    <label>ユーザー名：
-      <input type="text" name="name" required pattern="[a-z]+" title="小文字英字">
-    </label><br>
-    <label>パスワード：
-      <input type="password" name="password" required pattern="[a-z0-9]+" title="小文字英字または数字">
-    </label><br>
-    <button type="submit" style="font-size: 18px; padding: 10px 20px; width: 30%;">送信</button>
-  </form>
-</body>
-</html>
-`;
-	    res.send(html);
+	    const html_login = await ejs.renderFile(`${__dirname}/webapp5_ejs/login.ejs`);
+	    res.send(html_login);
 	}
     });
+
+    //ユーザー変更・ログイン画面送信
     app.post('/login', async (req, res) => {
 	const name = req.body.name//名前
 	const password = sha256(req.body.password);//ハッシュ化パスワード
@@ -380,38 +351,10 @@ async function main(){
 	//token確認
 	if(await checkToken(req)){
 	    // HTML
-	    const html = `
-<!DOCTYPE html>
-<html lang="ja">
-<head>
-  <meta charset="UTF-8">
-  <title>Webapp研修＿ログイン画面</title>
-</head>
-<body>
-  <h1>シフト管理システム</h1>
-  <h2>新規ユーザ登録</h2>
-  <form action="/signup" method="POST">
-    <label>新規ユーザ名：
-      <input type="text" name="name" required pattern="[a-z]+" title="小文字英字">
-    </label><br>
-    <label>新規パスワード：
-      <input type="password" name="password" required pattern="[a-z0-9]+" title="小文字英字または数字">
-    </label><br>
-    <label>確認用パスワード（同じパスワードを打ってください）：
-      <input type="text" name="checkpassword" required pattern="[a-z0-9]+" title="小文字英字または数字">
-    </label><br>
-    <button type="submit" style="font-size: 18px; padding: 10px 20px; width: 30%;">送信</button>
-  </form>
-  <form action="/" method="GET">
-  <h2>ホーム画面に戻る</h2>
-    <button type="submit" style="font-size: 18px; padding: 10px 20px; width: 30%;">ホーム画面へ</button>
-  </form>
-</body>
-</html>
-`;
-	    res.send(html);
+	    const html_signup = await ejs.renderFile(`${__dirname}/webapp5_ejs/signup.ejs`);
+	    res.send(html_signup);
 	}else{
-	    sendError(res,'tokenの有効期限が切れています','/login','ログイン画面')
+	    sendError(res,'tokenの有効期限が切れています','/login','ログイン画面');
 	}
     });
     
@@ -419,14 +362,15 @@ async function main(){
     //新規ユーザ登録画面から送信
     app.post('/signup' , async (req, res) => {
 	if(await checkToken(req)){
-	    const name = req.body.name//名前
-	    const password = sha256(req.body.password);//ハッシュ化パスワード
-	    const check_password = sha256(req.body.checkpassword)//確認用ハッシュ化パスワード
+	    //名前・ハッシュ化パスワード・確認用ハッシュ化パスワード
+	    const name = req.body.name
+	    const password = sha256(req.body.password);
+	    const check_password = sha256(req.body.checkpassword);
 	    
 	    //ユーザーのnameとpassword
 	    const name_password = name+','+password
 	    
-	    //nameと同一passwordの確認
+	    //nameとpassword入力の確認
 	    if(await checkName(name)==false && password == check_password){
 		//nameとpasswordの保存
 		await passwordInsert(name,password)
@@ -459,10 +403,10 @@ async function main(){
 	]);
 	//ログイン画面へ
 	res.redirect('/login');
-    });
-    
+    });    
     app.listen(8822, () => {
 	console.log('Server listening on port 8822');
     });
 }
 main();
+

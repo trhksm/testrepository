@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="ja">
+  <head>
+    <meta charset="UTF-8">
+    <title>Webapp研修</title>
+  </head>
+  <body>
+    <h1>シフト変更</h1>
+    <h4>あなたは<%- username %>さんとしてログインしています</h4>
+    <div style="display: flex; gap: 50px; align-items: flex-start;">
+      <form>
+        <h2>シフト変更前</h2>
+        <label>ユーザ名：<%- username %></label><br>
+        <label>年月日：<%- date %></label><br>
+	<label>出社時刻：<%- stime %></label><br>
+	<label>退社時刻：<%- ftime %></label><br>
+	<label>コメント：<%- comment %></label><br>
+      </form>
+      <form action="/edit" method="POST">
+	<h2>シフト変更後</h2>
+	<label>ユーザ名：<%- username %></label><br>
+	<label>年月日：
+          <input type="date" name="new_date" required>
+	</label><br>
+	<label>出社時刻：
+          <input type="time" name="new_stime" required>
+	</label><br>
+	<label>退社時刻：
+          <input type="time" name="new_ftime" required>
+	</label><br>
+	<label>コメント：
+          <input type="text" name="new_comment">
+	</label><br><br>
+	<input type="hidden" name="pre_date" value=<%- date %>>
+	<button type="submit" style="font-size: 18px; padding: 10px 20px; width: 100%;">送信（シフト変更）</button>
+      </form>
+    </div>
+    <h2>出社予定</h2>
+    <table border="1">
+      <tr><th>ユーザ名</th><th>日付</th><th>出社</th><th>退社</th><th>コメント</th></tr>
+      <%- table %>
+    </table>
+    <div style="display: flex; gap: 50px; align-itmes: flex-start;">
+      <form action="/" method="GET">
+        <h2>ホーム画面に戻る</h2>
+        <button type="submit" style="font-size: 18px; padding: 10px 20px; width: 100%:">ホーム画面へ</button>
+      </form>
+    </div>
+  </body>
+</html>

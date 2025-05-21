@@ -1,0 +1,11 @@
+<form method="POST" action="/edit">
+  <input type="hidden" name="username" value=<%- username %>>
+  <input type="hidden" name="date" value=<&- date &>>
+  <td><%- username %></td>
+  <td><% date %></td>
+  <td><input type="time" name="stime" value=<%- stime %> class="edit-stime" required></td>
+  <td><input type="time" name="ftime" value=<%- ftime %> class="edit-ftime" required></td>
+  <td><input type="text" name="comment" value=<%- comment %> class="edit-comment"></td>
+  <td><button type="submit">保存</button></td>
+  <td><button type="button" onclick="location.reload()">キャンセル</button></td>
+</form>

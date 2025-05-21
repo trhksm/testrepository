@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="ja">
+  <head>
+    <meta charset="UTF-8">
+    <title>Webapp研修</title>
+  </head>
+  <body>
+    <h1>シフト管理システム</h1>
+    <h4>あなたは<%- username %>さんとしてログインしています</h4>
+    <div style="display: flex; gap: 50px; align-items: flex-start;">
+      <form action="/" method="POST">
+	<h2>シフト投稿・更新</h2>
+	<label>年月日：
+          <input type="date" name="date" required>
+	</label><br>
+	<label>出社時刻：
+          <input type="time" name="stime" required>
+	</label><br>
+	<label>退社時刻：
+          <input type="time" name="ftime" required>
+	</label><br>
+	<label>コメント：
+          <input type="text" name="comment">
+	</label><br><br>
+	<button type="submit" style="font-size: 18px; padding: 10px 20px; width: 100%;">送信（シフト投稿・更新）</button>
+      </form>
+    </div>
+    <h2>出社予定</h2>
+    <table border="1">
+      <tr><th>ユーザ名</th><th>日付</th><th>出社</th><th>退社</th><th>コメント</th></tr>
+      <%- rows %>
+    </table>
+    <div style="display: flex; gap: 50px; align-items: flex-start;">
+      <form action="/signup" method="GET">
+	<h2>新規ユーザ登録</h2>
+	<button type="submit" style="font-size: 18px; padding: 10px 20px; width: 100%;">新規ユーザ登録画面へ</button>
+      </form>
+      <form action="/logout" method="GET">
+	<h2>ログアウト</h2>
+	<button type="submit" style="font-size: 18px; padding: 10px 20px; width: 100%;">ログアウト（ログイン画面へ）</button>
+      </form>
+    </div>
+  </body>
+</html>

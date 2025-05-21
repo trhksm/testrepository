@@ -1,0 +1,21 @@
+<tr data-username=<%- row.username %> data-date=<%- row.date %>>
+  <td class="username"><%- row.username %></td>
+  <td class="date"><%- row.date %></td>
+  <td class="stime"><%- stimeHM %></td>
+  <td class="ftime"><%- ftimeHM %></td>
+  <td class="comment"><%- row.comment %></td>
+  <td>
+    <form action="/edit" method=GET>
+      <input type="hidden" name="username" value=<%- row.username %>>
+      <input type="hidden" name="date" value=<%- row.date %>>
+      <button type="submit">変更</button>
+    </form>
+  </td>
+  <td>
+    <form action="/delete" method=POST>
+      <input type="hidden" name="username" value=<%- row.username %>>
+      <input type="hidden" name="date" value=<%- row.date %>>
+      <button type="submit">削除</button>
+    </form>
+  </td>
+</tr>
