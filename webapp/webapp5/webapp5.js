@@ -60,7 +60,7 @@ async function tableSelect(t){
 //token削除
 async function tokenDelete(u){
     let db = await dbConnect();
-    await db.execute('DELETE FROM users_tokens WHERE username = ?', [u]);
+    await db.execute(`UPDATE users_tokens SET ena = FALSE WHERE username = ?`, [u]);
     await dbEnd(db);
 }
 
@@ -235,12 +235,12 @@ async function main(){
 	if(await checkToken(req)){
 	    //name取得
 	    const cookies = parseCookies(req);
-	    const name = cookies['name'];
+	    const username = cookies['name'];
 	    const name_shift = req.body.username;
 	    const date = req.body.date;
 	    //shift削除
-	    if(name == name_shift){
-		await shiftDelete(name,date);	    
+	    if(username == name_shift){
+		await shiftDelete(username,date);	    
 		res.redirect('/');
 	    }else{
 		sendError(res,'異なるユーザのシフトを削除しようとしています','/','ホーム画面');
@@ -256,36 +256,42 @@ async function main(){
 	    //name取得
 	    const cookies = parseCookies(req);
 	    const username = cookies['name']
-	    const date = req.query.date;
-	    const stime = req.query.stime;
-	    const ftime = req.query.ftime;
-	    const comment = req.query.comment;
-	    const db = await dbConnect();
-	    console.log(stime,ftime,comment);
-	    const [data] = await db.query(`SELECT username, DATE_FORMAT(date, '%Y-%m-%d') as date, stime, ftime, comment FROM shifts WHERE ena = TRUE ORDER BY date, CASE WHEN username = ? THEN 1 ELSE 2 END`, [username]);
-	    await dbEnd(db);
-	    //シフト表示形式用整理
-	    let table = await Promise.all(data.map(async (row) => {
-		const stimeHM = row.stime.slice(0, 5);
-		const ftimeHM = row.ftime.slice(0, 5);
-		return await ejs.renderFile(`${__dirname}/webapp5_ejs/tableread.ejs`, {
-		    row_username: row.username,
-		    row_date: row.date,
-		    stimeHM,
-		    ftimeHM,
-		    row_comment: row.comment,
+	    const name_shift = req.query.username;
+	    //shift削除
+	    if(username == name_shift){
+		const date = req.query.date;
+		const stime = req.query.stime;
+		const ftime = req.query.ftime;
+		const comment = req.query.comment;
+		const db = await dbConnect();
+		console.log(stime,ftime,comment);
+		const [data] = await db.query(`SELECT username, DATE_FORMAT(date, '%Y-%m-%d') as date, stime, ftime, comment FROM shifts WHERE ena = TRUE ORDER BY date, CASE WHEN username = ? THEN 1 ELSE 2 END`, [username]);
+		await dbEnd(db);
+		//シフト表示形式用整理
+		let table = await Promise.all(data.map(async (row) => {
+		    const stimeHM = row.stime.slice(0, 5);
+		    const ftimeHM = row.ftime.slice(0, 5);
+		    return await ejs.renderFile(`${__dirname}/webapp5_ejs/tableread.ejs`, {
+			row_username: row.username,
+			row_date: row.date,
+			stimeHM,
+			ftimeHM,
+			row_comment: row.comment,
+		    });
+		}));
+		table = table.join('');
+		const edit_html = await ejs.renderFile(`${__dirname}/webapp5_ejs/edit.ejs`, {
+		    username:username,
+		    date:date,
+		    stime:stime,
+		    ftime:ftime,
+		    comment:comment,
+		    table:table,
 		});
-	    }));
-	    table = table.join('');
-	    const edit_html = await ejs.renderFile(`${__dirname}/webapp5_ejs/edit.ejs`, {
-		username:username,
-		date:date,
-		stime:stime,
-		ftime:ftime,
-		comment:comment,
-		table:table,
-	    });
-	    res.send(edit_html);
+		res.send(edit_html);
+	    }else{
+		sendError(res,'異なるユーザのシフトを変更しようとしています','/','ホーム画面');
+	    }
 	}else{
 	    sendError(res,'tokenの有効期限が切れています','/login','ログイン画面');
 	}	
