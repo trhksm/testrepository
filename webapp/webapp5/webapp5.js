@@ -5,18 +5,20 @@ const crypto = require('crypto')
 const mysql = require('mysql2/promise');
 const fs = require("fs");
 const ejs = require("ejs");
-//接続
+
+
+//mysql接続 //自身のmysqlを使うにはここのみ変更
 async function dbConnect(){
     let db = await mysql.createConnection({
-        host: 'localhost',
-        user: 'root',
-        password: 'mysql_pass',
-        database: 'shift_system'
+        host: '153.126.217.122',  //mysqlhost変更
+        user: 'remote',           //mysqluser変更 
+        password: 'remotepass',   //password変更
+        database: 'shift_system'  //database変更
     });
     return db;
 }
 
-//接続終了
+//mysql接続終了
 async function dbEnd(db){
     if (db) {
         await db.end();
@@ -25,7 +27,7 @@ async function dbEnd(db){
 
 //shifts追加&更新
 async function shiftPut(u,d,s,f,c){
-    console.log({ u,d,s,f,c });
+    console.log({ u,d,s,f,c});
     let db = await dbConnect();
     const [rows] = await db.execute('SELECT id FROM shifts WHERE username = ? AND date = ? AND ena = TRUE', [u, d]);
     if (rows.length > 0) {
@@ -45,7 +47,10 @@ async function passwordInsert(u,p){
 //token追加
 async function tokenInsert(u,t){
     let db = await dbConnect();
-    await db.execute('INSERT INTO users_tokens (username, token) VALUES (?, ?)',[u,t]);
+    // 既存のトークンを無効化
+    await db.execute('UPDATE users_tokens SET ena = FALSE WHERE username = ?', [u]);
+    // 新しいトークンを有効で挿入
+    await db.execute('INSERT INTO users_tokens (username, token, ena) VALUES (?, ?, TRUE)', [u, t]);
     await dbEnd(db);
 }
 
@@ -133,13 +138,15 @@ function parseCookies(req){
 
 //token確認
 async function checkToken(req){
+    let db = await dbConnect();
     //cookie読み込み
     const cookies = parseCookies(req);
     //ユーザのnameとtoken
     const name_token = cookies['name']+','+cookies['token']
     //サーバ側のnameとtokenリストにあるか
-    const data = await tableSelect('users_tokens')
-    const name_tokenlist = data.map(row => row.username + ',' + row.token);
+    const [rows] = await db.query('SELECT * FROM users_tokens WHERE ena = TRUE');
+    const name_tokenlist = rows.map(row => row.username + ',' + row.token);
+    await dbEnd(db);
     return name_tokenlist.includes(name_token);
 }
 
@@ -161,6 +168,51 @@ async function checkName(name){
     return namelist.includes(name);
 }
 
+//table取得
+async function getTable(name){
+    //シフト読み込み
+    const db = await dbConnect();
+    const [data] = await db.query(`SELECT username, DATE_FORMAT(date, '%Y-%m-%d') as date, stime, ftime, comment,stime_ena ,ftime_ena FROM shifts WHERE ena = TRUE ORDER BY date, CASE WHEN username = ? THEN 1 ELSE 2 END`, [name]);
+    await dbEnd(db);
+    //シフト表示形式用整理
+    let table = await Promise.all(data.map(async (row) => {
+	var stimeHM = row.stime.slice(0, 5);
+	var ftimeHM = row.ftime.slice(0, 5);
+	if(row.stime_ena == false){stimeHM = "99:99";}
+	if(row.ftime_ena == false){ftimeHM = "99:99";}
+	return await ejs.renderFile(`${__dirname}/webapp5_ejs/table.ejs`, {
+	    row_username: row.username,
+	    row_date: row.date,
+	    stimeHM,
+	    ftimeHM,
+	    row_comment: row.comment,
+	});
+    }));
+    return table.join('');
+}
+
+//readtable取得
+async function getReadTable(name){
+    //シフト読み込み
+    const db = await dbConnect();
+    const [data] = await db.query(`SELECT username, DATE_FORMAT(date, '%Y-%m-%d') as date, stime, ftime, comment,stime_ena ,ftime_ena FROM shifts WHERE ena = TRUE ORDER BY date, CASE WHEN username = ? THEN 1 ELSE 2 END`, [name]);
+    await dbEnd(db);
+    //シフト表示形式用整理
+    let table = await Promise.all(data.map(async (row) => {
+	var stimeHM = row.stime.slice(0, 5);
+	var ftimeHM = row.ftime.slice(0, 5);
+	if(row.stime_ena == false){stimeHM = "99:99";}
+	if(row.ftime_ena == false){ftimeHM = "99:99";}
+	return await ejs.renderFile(`${__dirname}/webapp5_ejs/tableread.ejs`, {
+	    row_username: row.username,
+	    row_date: row.date,
+	    stimeHM,
+	    ftimeHM,
+	    row_comment: row.comment,
+	});
+    }));
+    return table.join('');
+}
 
 async function main(){
     //ホーム画面表示
@@ -169,27 +221,11 @@ async function main(){
 	if(await checkToken(req)){
 	    //name取得
 	    const cookies = parseCookies(req);
-	    const name = cookies['name'];
-	    //シフト読み込み
-	    const db = await dbConnect();
-	    const [data] = await db.query(`SELECT username, DATE_FORMAT(date, '%Y-%m-%d') as date, stime, ftime, comment FROM shifts WHERE ena = TRUE ORDER BY date, CASE WHEN username = ? THEN 1 ELSE 2 END`, [name]);
-	    await dbEnd(db);
-	    //シフト表示形式用整理
-	    let table = await Promise.all(data.map(async (row) => {
-		const stimeHM = row.stime.slice(0, 5);
-		const ftimeHM = row.ftime.slice(0, 5);
-		return await ejs.renderFile(`${__dirname}/webapp5_ejs/table.ejs`, {
-		    row_username: row.username,
-		    row_date: row.date,
-		    stimeHM,
-		    ftimeHM,
-		    row_comment: row.comment,
-		});
-	    }));
-	    table = table.join('');
+	    const username = cookies['name'];
+	    const table = await getTable(username);
 	    //ホーム画面HTML
 	    const home_html = await ejs.renderFile(`${__dirname}/webapp5_ejs/home.ejs`, {
-		username: name,
+		username: username,
 		table:table,
 	    });
 	    //画面表示
@@ -200,28 +236,66 @@ async function main(){
 	}
     });
     
-    //ホームから送信
+    //ホーム画面送信
     app.post('/', async (req, res) => {
 	//token確認
 	if(await checkToken(req)){
 	    //name取得
 	    const cookies = parseCookies(req);
 	    const username = cookies['name'];
-	    
 	    //年月日・出社時刻・退社時刻・コメント取得
 	    const date = req.body.date;
-	    const stime = req.body.stime;
-	    const ftime = req.body.ftime;
+	    console.log("skip_stime:", req.body.skip_stime);
+	    console.log("skip_ftime:", req.body.skip_ftime);
+	    console.log("stime:", req.body.stime);
+	    console.log("ftime:", req.body.ftime);
+	    var stime = "00:00:00";
+	    if(req.body.skip_stime === 'false'){stime = req.body.stime;}
+	    var ftime = "23:59:00";
+	    if(req.body.skip_ftime === 'false'){ftime = req.body.ftime;}
+	    console.log("final stime:", stime);
+	    console.log("final ftime:", ftime);
+	    console.log(stime,ftime);
 	    const comment = req.body.comment;
-	    
 	    //入社時刻と退社時刻の前後確認
 	    const sm = TtoM(stime);
 	    const fm = TtoM(ftime);
+	    const now = new Date();
+	    const work_start = new Date(date + 'T' + stime);
+	    const work_end = new Date(date + 'T' + ftime);
 	    if (sm >= fm) {
-		sendError(res,'入社時刻は退社時刻よりも前である必要があります','/','ホーム画面');
+		var error_text = '出社時刻は退社時刻よりも前である必要があります';
+		const table = await getTable(username);
+		const html = await ejs.renderFile(`${__dirname}/webapp5_ejs/home.ejs`, {
+		    username,
+		    table,
+		    error: error_text,
+		    input_date: date,
+		    input_stime: stime,
+		    input_ftime: ftime,
+		    input_comment: comment
+		});
+		res.status(400).send(html);
+	    }else if (work_start < now && work_end < now) {
+		var error_text = '過去の時刻は登録できません';
+		const table = await getTable(username);
+		const html = await ejs.renderFile(`${__dirname}/webapp5_ejs/home.ejs`, {
+		    username,
+		    table,
+		    error: error_text,
+		    input_date: date,
+		    input_stime: stime,
+		    input_ftime: ftime,
+		    input_comment: comment
+		});
+		res.status(400).send(html);
 	    }else{
 		//投稿内容出力
-		await shiftPut(username,date,stime,ftime,comment);	    
+		await shiftPut(username,date,stime,ftime,comment);
+		let db = await dbConnect();
+		if(req.body.skip_stime === 'true'){await db.execute('UPDATE shifts SET stime_ena = FALSE WHERE username = ? AND date = ? AND ena = TRUE',[username,date]);}
+		if(req.body.skip_ftime === 'true'){await db.execute('UPDATE shifts SET ftime_ena = FALSE WHERE username = ? AND date = ? AND ena = TRUE',[username,date]);}
+		await dbEnd(db);
 		res.redirect('/');
 	    }
 	}else{
@@ -263,23 +337,7 @@ async function main(){
 		const stime = req.query.stime;
 		const ftime = req.query.ftime;
 		const comment = req.query.comment;
-		const db = await dbConnect();
-		console.log(stime,ftime,comment);
-		const [data] = await db.query(`SELECT username, DATE_FORMAT(date, '%Y-%m-%d') as date, stime, ftime, comment FROM shifts WHERE ena = TRUE ORDER BY date, CASE WHEN username = ? THEN 1 ELSE 2 END`, [username]);
-		await dbEnd(db);
-		//シフト表示形式用整理
-		let table = await Promise.all(data.map(async (row) => {
-		    const stimeHM = row.stime.slice(0, 5);
-		    const ftimeHM = row.ftime.slice(0, 5);
-		    return await ejs.renderFile(`${__dirname}/webapp5_ejs/tableread.ejs`, {
-			row_username: row.username,
-			row_date: row.date,
-			stimeHM,
-			ftimeHM,
-			row_comment: row.comment,
-		    });
-		}));
-		table = table.join('');
+		const table = await getReadTable(username);
 		const edit_html = await ejs.renderFile(`${__dirname}/webapp5_ejs/edit.ejs`, {
 		    username:username,
 		    date:date,
@@ -287,6 +345,10 @@ async function main(){
 		    ftime:ftime,
 		    comment:comment,
 		    table:table,
+		    input_date: date,
+		    input_stime: stime,
+		    input_ftime: ftime,
+		    input_comment: comment
 		});
 		res.send(edit_html);
 	    }else{
@@ -303,13 +365,66 @@ async function main(){
 	    const cookies = parseCookies(req);
 	    const username = cookies['name'];
 	    const pre_date = req.body.pre_date;
+	    const pre_stime = req.body.pre_stime;
+	    const pre_ftime = req.body.pre_ftime;
+	    const pre_comment = req.body.pre_comment;
 	    const new_date = req.body.new_date;
-	    const new_stime = req.body.new_stime;
-	    const new_ftime = req.body.new_ftime;
+	    var new_stime = "00:00:00";
+	    console.log(req.body.skip_new_stime,req.body.skip_new_ftime)
+	    if(req.body.skip_new_stime === 'false'){new_stime = req.body.new_stime;}
+	    var new_ftime = "23:59:00";
+	    if(req.body.skip_new_ftime === 'false'){new_ftime = req.body.new_ftime;}
 	    const new_comment = req.body.new_comment;
-	    await shiftDelete(username, pre_date);
-            await shiftPut(username, new_date, new_stime, new_ftime, new_comment);
-            res.redirect('/');
+	    console.log('new_stime:', new_stime);
+	    console.log('new_ftime:', new_ftime);
+	    const sm = TtoM(new_stime);
+	    const fm = TtoM(new_ftime);
+	    const now = new Date();
+	    const work_start = new Date(new_date + 'T' + new_stime);
+	    const work_end = new Date(new_date + 'T' + new_ftime);
+	    if (sm >= fm) {
+		var error_text = '出社時刻は退社時刻よりも前である必要があります';
+		const table = await getReadTable(username);
+		const html = await ejs.renderFile(`${__dirname}/webapp5_ejs/edit.ejs`, {
+		    username:username,
+		    date:pre_date,
+		    stime:pre_stime,
+		    ftime:pre_ftime,
+		    comment:pre_comment,
+		    table:table,
+		    error: error_text,
+		    input_date: new_date,
+		    input_stime: new_stime,
+		    input_ftime: new_ftime,
+		    input_comment: new_comment
+		});
+		res.status(400).send(html);
+	    }else if (work_start < now && work_end < now) {
+		var error_text = '過去の時刻は登録できません';
+		const table = await getReadTable(username);
+		const html = await ejs.renderFile(`${__dirname}/webapp5_ejs/edit.ejs`, {
+		    username:username,
+		    date:pre_date,
+		    stime:pre_stime,
+		    ftime:pre_ftime,
+		    comment:pre_comment,
+		    table:table,
+		    error: error_text,
+		    input_date: new_date,
+		    input_stime: new_stime,
+		    input_ftime: new_ftime,
+		    input_comment: new_comment
+		});
+		res.status(400).send(html);
+	    }else{
+		//投稿内容出力
+		await shiftPut(username,new_date,new_stime,new_ftime,new_comment);
+		let db = await dbConnect();
+		if(req.body.skip_new_stime === 'true'){await db.execute('UPDATE shifts SET stime_ena = FALSE WHERE username = ? AND date = ? AND ena = TRUE',[username,new_date]);}
+		if(req.body.skip_new_ftime === 'true'){await db.execute('UPDATE shifts SET ftime_ena = FALSE WHERE username = ? AND date = ? AND ena = TRUE',[username,new_date]);}
+		await dbEnd(db);
+		res.redirect('/');
+	    }
 	} else {
             sendError(res, 'tokenの有効期限が切れています', '/login', 'ログイン画面');
 	}
@@ -355,19 +470,19 @@ async function main(){
     //新規ユーザ登録画面表示
     app.get('/signup', async (req, res) => {	
 	//token確認
-	if(await checkToken(req)){
+	//if(await checkToken(req)){
 	    // HTML
 	    const html_signup = await ejs.renderFile(`${__dirname}/webapp5_ejs/signup.ejs`);
 	    res.send(html_signup);
-	}else{
-	    sendError(res,'tokenの有効期限が切れています','/login','ログイン画面');
-	}
+	//}else{
+	    //sendError(res,'tokenの有効期限が切れています','/login','ログイン画面');
+	//}
     });
     
     
     //新規ユーザ登録画面から送信
     app.post('/signup' , async (req, res) => {
-	if(await checkToken(req)){
+	//if(await checkToken(req)){
 	    //名前・ハッシュ化パスワード・確認用ハッシュ化パスワード
 	    const name = req.body.name
 	    const password = sha256(req.body.password);
@@ -389,10 +504,10 @@ async function main(){
 	    }else{
 		sendError(res,'同じパスワードが入力されていません','/signup','ユーザ登録画面')
 	    }
-	}else{
+	//}else{
 	    //ログイン画面へ
-	    sendError(res,'tokenの有効期限が切れています','/login','ログイン画面');
-	}
+	    //sendError(res,'tokenの有効期限が切れています','/login','ログイン画面');
+	//}
     });
     
     //ログアウト
